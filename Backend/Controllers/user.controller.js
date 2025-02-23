@@ -29,6 +29,8 @@ module.exports.registerUser = async(req, res, next) => {
 module.exports.loginUser = async(req, res, next) => {
 
     const errors = validationResult(req);
+    console.log("Printing errors")
+    console.log(errors)
     if(!errors.isEmpty()){
         return res.status(400).json({ errors: errors.array() });
     }
@@ -48,6 +50,7 @@ module.exports.loginUser = async(req, res, next) => {
     }
 
     const token = user.generateAuthToken();
+    console.log("Printing token", token);
 
     res.cookie('token', token);
 
@@ -59,9 +62,46 @@ module.exports.getProfile = async(req, res, next) => {
     res.status(200).json({ user: req.user });
 }
 
-module.exports.logoutUser = async(req, res, next) => {
-    res.clearCookie('token');
-    const token = req.cookies.token || req.headers.authorization.split(' ')[1];
-    await blacklistedTokenSchema.create({ token });
-    res.status(200).json({ message: 'Logged out successfully!' });
-}
+// module.exports.logoutUser = async (req, res, next) => {
+//     res.clearCookie('token');
+//     const token = req.cookies.token || req.headers.authorization.split(' ')[ 1 ];
+//     console.log('Clearing token', token);
+
+//     await blacklistedTokenSchema.create({ token });
+
+//     res.status(200).json({ message: 'Logged out' });
+
+// }
+
+
+module.exports.logoutUser = async (req, res, next) => {
+    try {
+        // ✅ Extract the token BEFORE clearing the cookie
+        const token = req.cookies.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+        console.log('Clearing token', token);
+
+        // ✅ Check if token exists
+        if (!token) {
+            return res.status(400).json({ message: 'No token provided' });
+        }
+
+        // ✅ Clear the cookie AFTER extracting the token
+        res.clearCookie('token');
+
+        // ✅ Check if token is already blacklisted
+        const existingToken = await blacklistedTokenSchema.findOne({ token });
+
+        if (existingToken) {
+            console.log('Token already blacklisted');
+            return res.status(400).json({ message: 'Token already blacklisted' });
+        }
+
+        // ✅ Blacklist the token
+        await blacklistedTokenSchema.create({ token });
+
+        res.status(200).json({ message: 'Logged out successfully!' });
+    } catch (error) {
+        console.error("Logout Error:", error);
+        res.status(500).json({ message: 'Server error during logout' });
+    }
+};
